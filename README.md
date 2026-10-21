@@ -46,5 +46,21 @@ Each cluster's mastery is a Beta posterior over "answers this cluster correctly"
 npm install
 npm run dev      # starts Vite on http://0.0.0.0:3000
 npm run build    # TypeScript check & production Vite build
+npm run deploy   # builds and pushes dist to gh-pages branch
 npm run lint     # TypeScript type-checking
 ```
+
+## GitHub Pages Deployment
+
+To ensure your GitHub Pages renders properly:
+
+1. **GitHub Actions (Recommended)**:
+   - In your GitHub repo, go to **Settings** → **Pages**.
+   - Under **Build and deployment > Source**, select **GitHub Actions**.
+   - The included `.github/workflows/deploy.yml` workflow will automatically build and publish the app on every push.
+
+2. **Branch Deployment (`gh-pages`)**:
+   - Run `npm run deploy` in your terminal to publish the compiled `dist/` bundle.
+   - In GitHub **Settings** → **Pages**, select **Deploy from a branch**, choose `gh-pages` branch, and folder `/ (root)`.
+   - *Note*: Never set source branch to `main` with `/ (root)` because GitHub will attempt to serve uncompiled `.tsx` files directly, which causes a blank white screen in web browsers.
+

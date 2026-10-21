@@ -22,7 +22,7 @@ export const PyqView: React.FC = () => {
     }
 
     const script = document.createElement('script');
-    script.src = '/data/pyq.js';
+    script.src = './data/pyq.js';
     script.onload = () => {
       setData(window.DATA_PYQ || []);
       setLoading(false);

@@ -91,9 +91,96 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleRoute);
   }, []);
 
-  // Data sets from window
-  const clusters: Cluster[] = useMemo(() => window.DATA_CLUSTERS || [], []);
-  const questions: Question[] = useMemo(() => window.DATA_QUESTIONS || [], []);
+  // Data sets from window with dynamic loader fallback
+  const [clusters, setClusters] = useState<Cluster[]>(() => window.DATA_CLUSTERS || []);
+  const [questions, setQuestions] = useState<Question[]>(() => window.DATA_QUESTIONS || []);
+  const [dataLoading, setDataLoading] = useState<boolean>(() => !window.DATA_CLUSTERS || !window.DATA_QUESTIONS);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let pollTimer: any = null;
+    let attempts = 0;
+
+    const checkWindowData = () => {
+      if (
+        window.DATA_CLUSTERS &&
+        window.DATA_CLUSTERS.length > 0 &&
+        window.DATA_QUESTIONS &&
+        window.DATA_QUESTIONS.length > 0
+      ) {
+        if (mounted) {
+          setClusters(window.DATA_CLUSTERS);
+          setQuestions(window.DATA_QUESTIONS);
+          setDataLoading(false);
+          setDataError(null);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    if (checkWindowData()) return;
+
+    const loadScript = (src: string): Promise<void> => {
+      return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        s.onload = () => resolve();
+        s.onerror = () => {
+          console.warn(`Script failed to load from ${src}`);
+          resolve(); // Resolve to let fallback chain continue
+        };
+        document.head.appendChild(s);
+      });
+    };
+
+    const tryLoad = async () => {
+      try {
+        await Promise.all([
+          loadScript('./data/clusters.js'),
+          loadScript('./data/questions.js'),
+          loadScript('./data/coverage.js'),
+          loadScript('./data/pyq.js'),
+        ]);
+        if (mounted && !checkWindowData()) {
+          // Fallback to unprefixed data/ path
+          await Promise.all([
+            loadScript('data/clusters.js'),
+            loadScript('data/questions.js'),
+            loadScript('data/coverage.js'),
+            loadScript('data/pyq.js'),
+          ]);
+          if (mounted && !checkWindowData()) {
+            setDataError('Could not load data/clusters.js and data/questions.js. Please verify repository files or disable ad-blockers.');
+            setDataLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Data script load error:', err);
+        if (mounted) {
+          setDataError('Unable to load high-yield question clusters.');
+          setDataLoading(false);
+        }
+      }
+    };
+
+    pollTimer = setInterval(() => {
+      attempts++;
+      if (checkWindowData()) {
+        clearInterval(pollTimer);
+      } else if (attempts >= 8) {
+        clearInterval(pollTimer);
+        tryLoad();
+      }
+    }, 150);
+
+    return () => {
+      mounted = false;
+      clearInterval(pollTimer);
+    };
+  }, []);
 
   const clusterMap = useMemo(() => {
     const map: Record<string, Cluster> = {};
@@ -532,6 +619,81 @@ export const App: React.FC = () => {
     logoutGoogle,
     createCloudSnapshot,
   ]);
+  if (dataLoading && clusters.length === 0) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'radial-gradient(circle at 50% 30%, #162044 0%, #0b1220 80%)',
+          color: '#f8fafc',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          textAlign: 'center',
+          padding: 24,
+        }}
+      >
+        <div style={{ fontSize: '3.5rem', marginBottom: 16 }}>🎮</div>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 8px 0', color: '#38bdf8' }}>
+          INI-CET Revision OS
+        </h1>
+        <p style={{ color: '#94a3b8', fontSize: '0.92rem', margin: '0 0 20px 0', maxWidth: 360, lineHeight: 1.5 }}>
+          Initializing High-Yield PYT Clusters, Algorithms & Question Vault...
+        </p>
+        <div style={{ width: 220, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 9999, overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, #38bdf8, #818cf8)', borderRadius: 9999 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError && clusters.length === 0) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0b1220',
+          color: '#f8fafc',
+          padding: 24,
+          textAlign: 'center',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}
+      >
+        <div style={{ maxWidth: 520, background: '#1e293b', border: '1px solid #ef4444', borderRadius: 16, padding: 28, boxShadow: '0 16px 36px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontSize: '2.8rem', marginBottom: 12 }}>⚠️</div>
+          <h2 style={{ color: '#f87171', margin: '0 0 10px 0', fontSize: '1.3rem' }}>Cluster Data Loading Alert</h2>
+          <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5, margin: '0 0 20px 0' }}>{dataError}</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn primary"
+              style={{ fontWeight: 700 }}
+            >
+              🔄 Retry Connection
+            </button>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              className="btn danger"
+            >
+              🧹 Clear Cache
+            </button>
+          </div>
+          <p style={{ color: '#64748b', fontSize: '0.78rem', margin: '20px 0 0 0' }}>
+            Tip: If on GitHub Pages, verify repository settings in Settings &gt; Pages &gt; Build and deployment.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <StateContext.Provider value={contextValue}>
