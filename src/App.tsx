@@ -29,6 +29,17 @@ import { PlaybookView } from './views/PlaybookView';
 import { SettingsView } from './views/SettingsView';
 import { DiscriminatorView } from './views/DiscriminatorView';
 import { VolatileSheetsView } from './views/VolatileSheetsView';
+import { PearlsView } from './views/PearlsView';
+import { VisualVaultView } from './views/VisualVaultView';
+import {
+  auth,
+  testConnection,
+  loginWithGoogle,
+  logoutUser,
+  saveUserStateToCloud,
+  loadUserStateFromCloud,
+  createCloudBackup,
+} from './firebase';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => loadState());
@@ -396,6 +407,72 @@ export const App: React.FC = () => {
     window.location.hash = '#/review';
   }, []);
 
+  const togglePearlMastered = useCallback((id: string) => {
+    updateState(prev => {
+      const pearls = { ...(prev.pearls || {}) };
+      pearls[id] = !pearls[id];
+      return { ...prev, pearls };
+    });
+  }, [updateState]);
+
+  // Cloud Storage & Auth State
+  const [cloudUser, setCloudUser] = useState<any>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+
+  useEffect(() => {
+    testConnection();
+    const unsub = auth.onAuthStateChanged(u => {
+      setCloudUser(u);
+    });
+    return () => unsub();
+  }, []);
+
+  const syncToCloud = useCallback(async (): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    setCloudSyncStatus('syncing');
+    try {
+      await saveUserStateToCloud(auth.currentUser.uid, state, auth.currentUser.email || undefined);
+      setCloudSyncStatus('synced');
+      return true;
+    } catch {
+      setCloudSyncStatus('error');
+      return false;
+    }
+  }, [state]);
+
+  const loadFromCloud = useCallback(async (): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    setCloudSyncStatus('syncing');
+    try {
+      const loaded = await loadUserStateFromCloud(auth.currentUser.uid);
+      if (loaded) {
+        setState(loaded);
+        setCloudSyncStatus('synced');
+        return true;
+      }
+      setCloudSyncStatus('idle');
+      return false;
+    } catch {
+      setCloudSyncStatus('error');
+      return false;
+    }
+  }, []);
+
+  const loginGoogle = useCallback(async () => {
+    const u = await loginWithGoogle();
+    setCloudUser(u);
+  }, []);
+
+  const logoutGoogle = useCallback(async () => {
+    await logoutUser();
+    setCloudUser(null);
+  }, []);
+
+  const createCloudSnapshot = useCallback(async (label?: string) => {
+    if (!auth.currentUser) return undefined;
+    return await createCloudBackup(auth.currentUser.uid, state, label);
+  }, [state]);
+
   const contextValue = useMemo(() => ({
     state,
     clusters,
@@ -415,8 +492,16 @@ export const App: React.FC = () => {
     addNotebookItem,
     incrementNotebookRecall,
     resetNotebookRecall,
+    togglePearlMastered,
     resetAllData,
     importData,
+    cloudUser,
+    cloudSyncStatus,
+    syncToCloud,
+    loadFromCloud,
+    loginGoogle,
+    logoutGoogle,
+    createCloudSnapshot,
   }), [
     state,
     clusters,
@@ -436,8 +521,16 @@ export const App: React.FC = () => {
     addNotebookItem,
     incrementNotebookRecall,
     resetNotebookRecall,
+    togglePearlMastered,
     resetAllData,
     importData,
+    cloudUser,
+    cloudSyncStatus,
+    syncToCloud,
+    loadFromCloud,
+    loginGoogle,
+    logoutGoogle,
+    createCloudSnapshot,
   ]);
 
   return (
@@ -467,6 +560,10 @@ export const App: React.FC = () => {
         {currentRoute === 'pyq' && <PyqView />}
         {currentRoute === 'coverage' && <CoverageView />}
         {currentRoute === 'playbook' && <PlaybookView />}
+        {currentRoute === 'pearls' && (
+          <PearlsView initialPearlId={routeArg} onStartBlock={startBlock} />
+        )}
+        {currentRoute === 'vault' && <VisualVaultView />}
         {currentRoute === 'discriminators' && <DiscriminatorView />}
         {currentRoute === 'volatile' && <VolatileSheetsView />}
         {currentRoute === 'settings' && <SettingsView />}

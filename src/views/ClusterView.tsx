@@ -11,6 +11,7 @@ import {
 import { md, clozeHTML, renderFlowchart } from '../utils/render';
 import { ImageLightboxModal } from '../components/ImageLightboxModal';
 import { CONFUSABLE_PAIRS } from '../data/confusablePairs';
+import { APEX_PEARLS } from '../data/pearlsData';
 
 interface ClusterViewProps {
   clusterId: string;
@@ -50,6 +51,7 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
   const [lab, cls] = st ? STATUS[st.status] : ['Untested', ''];
   const revisedDate = S.read[c.id];
   const relatedPairs = CONFUSABLE_PAIRS.filter(p => p.clusterIds?.includes(clusterId));
+  const relatedPearls = APEX_PEARLS.filter(p => p.clusterId === clusterId || (p.subject.toLowerCase() === c.subject.toLowerCase() && p.title.toLowerCase().includes(c.title.split(' ')[0].toLowerCase())));
 
   const toggleCard = (idx: number) => {
     setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
@@ -132,6 +134,36 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
           ))}
         </ul>
       </div>
+
+      {relatedPearls.length > 0 && (
+        <div className="box" style={{ background: '#0e1a2f', border: '1px solid #1e3a8a', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1.2rem' }}>💎</span>
+              <b style={{ color: '#60a5fa' }}>Connected Apex Pearls (High-Yield Contrast Matrix)</b>
+            </div>
+            <a href="#/pearls" className="small" style={{ color: '#38bdf8' }}>View All Pearls →</a>
+          </div>
+          {relatedPearls.map(p => (
+            <div key={p.id} style={{ background: '#070f1e', padding: '10px 14px', borderRadius: 6, marginBottom: 8, border: '1px solid #1e293b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <a href={`#/pearls/${p.id}`} style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.95rem' }}>
+                  Pearl #{p.num}: {p.title}
+                </a>
+                <span className="small muted">{'★'.repeat(p.yield)}</span>
+              </div>
+              <div className="small muted" style={{ marginTop: 4 }}>
+                Reflex: {p.anchor}
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <a href={`#/pearls/${p.id}`} className="btn small" style={{ background: '#1e293b', border: '1px solid #3b82f6', color: '#93c5fd' }}>
+                  Open Full Pearl & Discriminator Matrix →
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {c.algorithm && (
         <>

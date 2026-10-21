@@ -127,6 +127,133 @@ export const TodayView: React.FC<TodayViewProps> = ({ onStartBlock }) => {
         </>
       )}
 
+      {/* Gamified Daily Quests & Level Progress */}
+      <div
+        className="card"
+        style={{
+          background: 'linear-gradient(135deg, rgba(22, 32, 68, 0.95) 0%, rgba(14, 21, 46, 0.95) 100%)',
+          border: '1.5px solid var(--line-strong)',
+          marginBottom: 16,
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1.4rem' }}>🎮</span>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#f8fafc', fontWeight: 800 }}>
+                Today's High-Yield Quests
+              </h2>
+              <span className="pill good" style={{ fontSize: '0.72rem' }}>
+                +250 Daily XP Potential
+              </span>
+            </div>
+            <p className="muted small" style={{ margin: '4px 0 0' }}>
+              Level up your diagnostic reflexes to secure an All-India Top 100 Rank. Complete daily quests to build unstoppable streaks!
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a href="#/pearls" className="btn sm" style={{ background: 'var(--soft)', color: 'var(--accent)', border: '1px solid var(--line-strong)' }}>
+              💎 Apex Pearls Directory
+            </a>
+            <button
+              onClick={() => onStartBlock('mixed')}
+              className="btn sm primary"
+            >
+              ⚡ Quick 50-Q Mixed Block
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Daily Quests Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 14 }}>
+          {/* Quest 1 */}
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: S.blocks.length > 0 ? '1px solid #10b981' : '1px solid var(--line)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: S.blocks.length > 0 ? 'var(--good)' : 'var(--ink)' }}>
+                {S.blocks.length > 0 ? '✓ Completed' : '○ Daily Block'}
+              </div>
+              <div className="small muted">Solve 1 Timed Block</div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24' }}>+100 XP</span>
+          </div>
+
+          {/* Quest 2 */}
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: Object.keys(S.pearls || {}).length >= 2 ? '1px solid #10b981' : '1px solid var(--line)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: Object.keys(S.pearls || {}).length >= 2 ? 'var(--good)' : 'var(--ink)' }}>
+                {Object.keys(S.pearls || {}).length >= 2 ? '✓ Mastered' : '○ Apex Pearls'}
+              </div>
+              <div className="small muted">Master 2 Key Pearls ({Object.keys(S.pearls || {}).length}/2)</div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24' }}>+60 XP</span>
+          </div>
+
+          {/* Quest 3 */}
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: S.attempts.length > 0 ? '1px solid #10b981' : '1px solid var(--line)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: S.attempts.length > 0 ? 'var(--good)' : 'var(--ink)' }}>
+                {S.attempts.length > 0 ? '✓ Active' : '○ PYQ Drill'}
+              </div>
+              <div className="small muted">Attempt 10+ Questions</div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24' }}>+50 XP</span>
+          </div>
+
+          {/* Quest 4 */}
+          <div
+            style={{
+              background: 'rgba(15, 23, 42, 0.55)',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: unres.length === 0 && S.errors.length > 0 ? '1px solid #10b981' : '1px solid var(--line)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: unres.length === 0 ? 'var(--good)' : 'var(--ink)' }}>
+                {unres.length === 0 ? '✓ Flawless' : '○ Error OS Purge'}
+              </div>
+              <div className="small muted">{unres.length} Unresolved Errors</div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24' }}>+40 XP</span>
+          </div>
+        </div>
+      </div>
+
       <div className="grid">
         <div className="card">
           <div className="muted small">Exam</div>

@@ -51,7 +51,8 @@ export function defaults(): AppState {
     active: null,
     sprint: {},
     spot: {},
-    nb: []
+    nb: [],
+    pearls: {}
   };
 }
 
@@ -234,8 +235,16 @@ interface StateContextType {
   addNotebookItem: (subject: string, text: string) => void;
   incrementNotebookRecall: (id: string) => void;
   resetNotebookRecall: (id: string) => void;
+  togglePearlMastered: (id: string) => void;
   resetAllData: () => void;
   importData: (imported: AppState) => boolean;
+  cloudUser: any;
+  cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  syncToCloud: () => Promise<boolean>;
+  loadFromCloud: () => Promise<boolean>;
+  loginGoogle: () => Promise<void>;
+  logoutGoogle: () => Promise<void>;
+  createCloudSnapshot: (label?: string) => Promise<string | undefined>;
 }
 
 export const StateContext = createContext<StateContextType | null>(null);

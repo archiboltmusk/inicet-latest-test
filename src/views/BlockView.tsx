@@ -18,6 +18,9 @@ import {
 } from '../state';
 import { stemHTML } from '../utils/render';
 import { ImageLightboxModal } from '../components/ImageLightboxModal';
+import { sound } from '../utils/audio';
+import { fireConfetti } from '../utils/confetti';
+import { APEX_PEARLS } from '../data/pearlsData';
 
 export const MODES: Record<string, { label: string; n: number; secs: number }> = {
   mixed: { label: '50-Q mixed block', n: 50, secs: 45 * 60 },
@@ -105,8 +108,32 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
     active.enter = Date.now();
   };
 
+  const [streak, setStreak] = useState(0);
+
   const selectAnswer = (optionIdx: number) => {
     if (!B || B.done) return;
+
+    // Gamified active feedback sound & combo tracker
+    const curQid = B.qids[B.cur];
+    const curQ = questionMap[curQid];
+    if (curQ) {
+      if (curQ.a === optionIdx) {
+        setStreak(s => {
+          const next = s + 1;
+          if (next > 1) {
+            sound.playStreak(next);
+            if (next % 5 === 0) fireConfetti(1800);
+          } else {
+            sound.playCorrect();
+          }
+          return next;
+        });
+      } else {
+        setStreak(0);
+        sound.playWrong();
+      }
+    }
+
     updateState(prev => {
       if (!prev.active) return prev;
       const act = { ...prev.active };
@@ -389,6 +416,9 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         };
       }
     });
+
+    fireConfetti(3500);
+    sound.playVictory();
 
     if (auto) showToast('Time up: block locked');
   };
@@ -891,6 +921,32 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
                 {q.x && `\n\nAsked: ${q.x}`}
               </div>
 
+              {(() => {
+                const matchingPearl = APEX_PEARLS.find(p => (p.clusterId && q.c?.includes(p.clusterId)) || (q.s && p.subject.toLowerCase() === q.s.toLowerCase() && p.title.toLowerCase().includes(q.t?.toLowerCase() || '')));
+                if (!matchingPearl) return null;
+                return (
+                  <div style={{ margin: '12px 0', padding: '12px 16px', background: '#0e1a2f', borderRadius: 10, border: '1.5px solid #1e40af' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: '1.1rem' }}>💎</span>
+                        <b style={{ color: '#60a5fa', fontSize: '0.9rem' }}>Apex Pearl: {matchingPearl.title}</b>
+                      </div>
+                      <a href={`#/pearls/${matchingPearl.id}`} target="_blank" rel="noreferrer" className="btn sm" style={{ background: '#1e293b', border: '1px solid #3b82f6', color: '#93c5fd' }}>
+                        View Trap Alert & Matrix ↗
+                      </a>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginTop: 6, lineHeight: 1.45 }}>
+                      <span style={{ color: '#38bdf8', fontWeight: 700 }}>⚡ 30s Reflex: </span>
+                      {matchingPearl.anchor}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#f87171', marginTop: 4, lineHeight: 1.45 }}>
+                      <span style={{ fontWeight: 700 }}>⚠️ AIIMS Trap: </span>
+                      {matchingPearl.trapAlert}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {!a.skip && (
                 <>
                   <div className="row">
@@ -1016,6 +1072,30 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           </button>
         </div>
       </div>
+
+      {streak >= 2 && (
+        <div
+          style={{
+            margin: '8px 0',
+            padding: '6px 14px',
+            borderRadius: 99,
+            background: 'linear-gradient(90deg, rgba(255, 107, 53, 0.22), rgba(251, 191, 36, 0.22))',
+            border: '1.5px solid #ff6b35',
+            color: '#ff8a50',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            boxShadow: '0 0 16px rgba(255, 107, 53, 0.35)',
+            animation: 'pop-correct 0.25s ease-out',
+          }}
+        >
+          <span>🔥</span>
+          <span>{streak} IN A ROW COMBO!</span>
+          <span style={{ color: '#fbbf24', fontSize: '0.78rem' }}>+{streak * 50} XP Bonus Multiplier</span>
+        </div>
+      )}
 
       {B.limit > 0 && (
         <>

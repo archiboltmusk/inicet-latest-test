@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "userState": {
+      "title": "User Revision State",
+      "description": "User progress, attempts, streaks, pearls mastery, notes, and study configuration.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "lastSyncedAt": { "type": "string", "format": "date-time" },
+        "stateJson": { "type": "string", "maxLength": 1048576 },
+        "totalAttempts": { "type": "number" },
+        "masteredPearlsCount": { "type": "number" },
+        "streak": { "type": "number" }
+      },
+      "required": ["uid", "stateJson", "lastSyncedAt"]
+    },
+    "backupSnapshot": {
+      "title": "Cloud Backup Snapshot",
+      "description": "Timestamped cloud snapshot of user progress for cross-device restoration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "label": { "type": "string", "maxLength": 200 },
+        "stateJson": { "type": "string", "maxLength": 1048576 }
+      },
+      "required": ["id", "userId", "createdAt", "stateJson"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userState",
+      "description": "User revision state and sync progress document"
+    },
+    "/users/{userId}/backups/{backupId}": {
+      "schema": "backupSnapshot",
+      "description": "Timestamped backups of user revision progress"
+    }
+  }
+}

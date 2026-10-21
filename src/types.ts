@@ -171,6 +171,23 @@ export interface AppSettings {
   theme: string;
 }
 
+export interface PearlMedia {
+  type: 'image' | 'video' | 'animation';
+  url: string;
+  title: string;
+  caption: string;
+  credit?: string;
+  badge?: string;
+  simulationId?: string;
+}
+
+export interface CloudSyncInfo {
+  lastSyncedAt?: string;
+  autoSync?: boolean;
+  userEmail?: string;
+  userId?: string;
+}
+
 export interface AppState {
   v: number;
   settings: AppSettings;
@@ -184,6 +201,9 @@ export interface AppState {
   sprint: Record<string, boolean>;
   spot: Record<string | number, boolean>;
   nb: NotebookItem[];
+  pearls?: Record<string, boolean>;
+  cloudSync?: CloudSyncInfo;
+  dailyStreak?: number;
 }
 
 export interface ClusterStat {
