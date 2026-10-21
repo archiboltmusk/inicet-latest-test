@@ -27,6 +27,8 @@ import { PyqView } from './views/PyqView';
 import { CoverageView } from './views/CoverageView';
 import { PlaybookView } from './views/PlaybookView';
 import { SettingsView } from './views/SettingsView';
+import { DiscriminatorView } from './views/DiscriminatorView';
+import { VolatileSheetsView } from './views/VolatileSheetsView';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => loadState());
@@ -283,7 +285,55 @@ export const App: React.FC = () => {
     }
 
     let ids: string[] = [];
-    if (mode === 'diagnostic') ids = pickDiagnostic(50);
+    let partQids: string[][] | undefined = undefined;
+    let limitSecs = MODES[mode]?.secs || 45 * 60;
+
+    if (mode === 'gt200') {
+      const all200 = pickMixed(200);
+      if (all200.length < 50) {
+        showToast('Not enough questions to start Grand Test');
+        return;
+      }
+      partQids = [
+        all200.slice(0, 50),
+        all200.slice(50, 100),
+        all200.slice(100, 150),
+        all200.slice(150, 200),
+      ].filter(p => p.length > 0);
+      ids = partQids[0];
+      limitSecs = 45 * 60;
+    } else if (mode === 'multicorrect') {
+      const multiPool = questions.filter(
+        q =>
+          /assertion|\band\b|1\s*,|both\s|which of the following are/i.test(q.q) ||
+          q.o.some(opt => /^[1-4]\s*(?:,|and)/i.test(opt))
+      );
+      ids = shuffle(multiPool.length > 10 ? multiPool : questions).slice(0, 25).map(q => q.id);
+      limitSecs = 25 * 50;
+    } else if (mode === 'flush48') {
+      const recentErrIds = Array.from(
+        new Set(
+          state.errors
+            .filter(e => !e.resolved && Date.now() - e.ts <= 48 * 3600 * 1000)
+            .map(e => e.qid)
+        )
+      );
+      ids = shuffle(recentErrIds.filter(id => !!questionMap[id])).slice(0, 30);
+    } else if (mode === 'flush7d') {
+      const weekErrIds = Array.from(
+        new Set(
+          state.errors
+            .filter(
+              e =>
+                !e.resolved &&
+                Date.now() - e.ts > 48 * 3600 * 1000 &&
+                Date.now() - e.ts <= 7 * DAY
+            )
+            .map(e => e.qid)
+        )
+      );
+      ids = shuffle(weekErrIds.filter(id => !!questionMap[id])).slice(0, 40);
+    } else if (mode === 'diagnostic') ids = pickDiagnostic(50);
     else if (mode === 'purge') ids = pickPurge(50);
     else if (mode === 'pyq26') {
       ids = shuffle(questions.filter(q => /^PYQ/.test(q.t || '')).map(q => q.id));
@@ -301,7 +351,7 @@ export const App: React.FC = () => {
       return;
     }
 
-    const secs = MODES[mode]?.secs || Math.round(ids.length * 45);
+    const secs = limitSecs;
     updateState(prev => ({
       ...prev,
       active: {
@@ -318,12 +368,18 @@ export const App: React.FC = () => {
         cur: 0,
         enter: Date.now(),
         done: false,
+        part: mode === 'gt200' ? 1 : undefined,
+        totalParts: mode === 'gt200' ? 4 : undefined,
+        partQids: partQids,
+        partScores: [],
       },
     }));
 
     window.location.hash = '#/block';
   }, [
     state.active,
+    state.errors,
+    questionMap,
     pickDiagnostic,
     pickPurge,
     questions,
@@ -411,6 +467,8 @@ export const App: React.FC = () => {
         {currentRoute === 'pyq' && <PyqView />}
         {currentRoute === 'coverage' && <CoverageView />}
         {currentRoute === 'playbook' && <PlaybookView />}
+        {currentRoute === 'discriminators' && <DiscriminatorView />}
+        {currentRoute === 'volatile' && <VolatileSheetsView />}
         {currentRoute === 'settings' && <SettingsView />}
       </main>
       <div id="toast" role="status" className={toastMsg ? 'on' : ''}>

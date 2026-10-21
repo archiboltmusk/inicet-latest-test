@@ -133,6 +133,7 @@ export interface BlockSummary {
   wrong: number;
   net: number;
   used: number;
+  partScores?: { part: number; correct: number; wrong: number; net: number; used: number }[];
 }
 
 export interface ActiveBlock {
@@ -140,7 +141,7 @@ export interface ActiveBlock {
   mode: string;
   cid: string | null;
   qids: string[];
-  ans: Record<number, number>;
+  ans: Record<number, number | number[]>;
   elim: Record<number, number[]>;
   flags: Record<number, boolean>;
   tq: Record<number, number>;
@@ -150,6 +151,10 @@ export interface ActiveBlock {
   enter: number;
   done: boolean;
   used?: number;
+  part?: number;
+  totalParts?: number;
+  partQids?: string[][];
+  partScores?: { part: number; correct: number; wrong: number; net: number; used: number }[];
 }
 
 export interface NotebookItem {

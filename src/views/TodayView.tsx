@@ -235,6 +235,13 @@ export const TodayView: React.FC<TodayViewProps> = ({ onStartBlock }) => {
       <div className="row">
         <button
           className="btn primary"
+          onClick={() => onStartBlock('gt200')}
+          style={{ fontWeight: 700 }}
+        >
+          🏆 200-Q Grand Test (4 locked parts)
+        </button>
+        <button
+          className="btn"
           onClick={() => onStartBlock('mixed')}
         >
           50-Q timed block (45 min)
@@ -244,11 +251,17 @@ export const TodayView: React.FC<TodayViewProps> = ({ onStartBlock }) => {
             className="btn"
             onClick={() => onStartBlock('diagnostic')}
           >
-            Diagnostic sweep (50 Q, 1 per untested cluster)
+            Diagnostic sweep (50 Q)
           </button>
         )}
         <a className="btn" href="#/review">
           Review cards ({dueTotal} due)
+        </a>
+        <a className="btn" href="#/discriminators">
+          ⚖️ Confusable Pairs
+        </a>
+        <a className="btn" href="#/volatile">
+          ⚡ 20 Volatile Sheets
         </a>
         {unres.length > 0 && (
           <button
@@ -262,7 +275,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ onStartBlock }) => {
           className="btn"
           onClick={() => onStartBlock('speed')}
         >
-          Speed run (25 Q, 12.5 min)
+          Speed run (25 Q)
         </button>
       </div>
 

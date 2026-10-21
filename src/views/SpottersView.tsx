@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppState } from '../state';
+import { ImageLightboxModal } from '../components/ImageLightboxModal';
 
 export const SPOT: [string, string, string][] = [
   ['Reed–Sternberg variants: owl-eye (mixed cellularity), lacunar (nodular sclerosis), popcorn/LP cells (NLPHL)', 'Hodgkin lymphoma; RS cell CD15+/CD30+, LP cell CD20+/CD15−/CD30−', 'path-lymphoma-myeloma'],
@@ -37,6 +38,13 @@ export const SPOT: [string, string, string][] = [
 export const SpottersView: React.FC = () => {
   const { state: S, clusters, clusterMap, toggleSpotterItem } = useAppState();
   const [openItems, setOpenItems] = useState<Record<number, boolean>>({});
+  const [lightbox, setLightbox] = useState<{
+    src: string;
+    caption?: string;
+    credit?: string;
+    lic?: string;
+    page?: string;
+  } | null>(null);
 
   const doneCount = Object.values(S.spot || {}).filter(Boolean).length;
 
@@ -99,6 +107,16 @@ export const SpottersView: React.FC = () => {
                   loading="lazy"
                   src={im.src}
                   alt={im.caption}
+                  title="Click to zoom / invert"
+                  onClick={() =>
+                    setLightbox({
+                      src: im.src,
+                      caption: `${q} → ${a}`,
+                      credit: im.credit,
+                      lic: im.licence,
+                      page: im.page,
+                    })
+                  }
                   style={{
                     width: '100%',
                     height: 140,
@@ -106,6 +124,7 @@ export const SpottersView: React.FC = () => {
                     background: '#000',
                     borderRadius: 6,
                     marginTop: 6,
+                    cursor: 'pointer',
                   }}
                 />
               )}
@@ -130,6 +149,17 @@ export const SpottersView: React.FC = () => {
           </a>
         ))}
       </div>
+
+      {lightbox && (
+        <ImageLightboxModal
+          src={lightbox.src}
+          caption={lightbox.caption}
+          credit={lightbox.credit}
+          licence={lightbox.lic}
+          sourceUrl={lightbox.page}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 };

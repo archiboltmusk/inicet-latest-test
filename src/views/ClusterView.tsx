@@ -9,6 +9,8 @@ import {
   esc,
 } from '../state';
 import { md, clozeHTML, renderFlowchart } from '../utils/render';
+import { ImageLightboxModal } from '../components/ImageLightboxModal';
+import { CONFUSABLE_PAIRS } from '../data/confusablePairs';
 
 interface ClusterViewProps {
   clusterId: string;
@@ -25,6 +27,13 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
   const [showAlgoText, setShowAlgoText] = useState(false);
   const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({});
   const [flippedPyqs, setFlippedPyqs] = useState<Record<number, boolean>>({});
+  const [lightbox, setLightbox] = useState<{
+    src: string;
+    caption?: string;
+    credit?: string;
+    lic?: string;
+    page?: string;
+  } | null>(null);
 
   const c = clusterMap[clusterId];
   if (!c) {
@@ -40,6 +49,7 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
   const st = stats[clusterId];
   const [lab, cls] = st ? STATUS[st.status] : ['Untested', ''];
   const revisedDate = S.read[c.id];
+  const relatedPairs = CONFUSABLE_PAIRS.filter(p => p.clusterIds?.includes(clusterId));
 
   const toggleCard = (idx: number) => {
     setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
@@ -198,13 +208,24 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
 
       {c.images && c.images.length > 0 && (
         <>
-          <h2>Images</h2>
+          <h2>Images <span className="muted small">tap to zoom and invert</span></h2>
           <div className="figs">
             {c.images.map((im, i) => (
               <figure key={i}>
-                <a href={im.page || '#'} target="_blank" rel="noopener noreferrer">
+                <div
+                  style={{ cursor: 'pointer' }}
+                  onClick={() =>
+                    setLightbox({
+                      src: im.src,
+                      caption: im.caption,
+                      credit: im.credit,
+                      lic: im.licence,
+                      page: im.page,
+                    })
+                  }
+                >
                   <img loading="lazy" src={im.src} alt={im.caption} />
-                </a>
+                </div>
                 <figcaption dangerouslySetInnerHTML={{ __html: md(im.caption) }} />
                 <div className="credit">
                   {im.credit || 'Wikimedia Commons'} · {im.licence || 'CC BY'}
@@ -308,6 +329,33 @@ export const ClusterView: React.FC<ClusterViewProps> = ({
         <li>Marrow Plan B: {c.subject} custom module filtered to this topic, exam mode</li>
         {c.verify && <li className="muted">Guideline basis: {c.verify}</li>}
       </ul>
+
+      {relatedPairs.length > 0 && (
+        <div className="card" style={{ marginTop: 16, borderLeft: '4px solid var(--accent)' }}>
+          <h3>Confusable Pairs Contrast Tables</h3>
+          <p className="small muted">
+            This cluster is part of classic 50/50 lookalike dilemmas tested in INI-CET:
+          </p>
+          <div className="row">
+            {relatedPairs.map(p => (
+              <a key={p.id} className="btn sm primary" href="#/discriminators">
+                Compare: {p.title} →
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <ImageLightboxModal
+          src={lightbox.src}
+          caption={lightbox.caption}
+          credit={lightbox.credit}
+          licence={lightbox.lic}
+          sourceUrl={lightbox.page}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 };

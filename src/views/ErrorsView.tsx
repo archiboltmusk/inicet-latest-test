@@ -1,5 +1,5 @@
-import React from 'react';
-import { useAppState, ET, ETYPES } from '../state';
+import React, { useState } from 'react';
+import { useAppState, ET, ETYPES, DAY } from '../state';
 
 interface ErrorsViewProps {
   onStartBlock: (mode: string) => void;
@@ -7,9 +7,17 @@ interface ErrorsViewProps {
 
 export const ErrorsView: React.FC<ErrorsViewProps> = ({ onStartBlock }) => {
   const { state: S, clusterMap, questionMap } = useAppState();
+  const [filterWindow, setFilterWindow] = useState<'all' | '48h' | '7d'>('all');
 
+  const now = Date.now();
   const unres = S.errors.filter(e => !e.resolved);
   const plugged = S.errors.filter(e => e.resolved).length;
+
+  const errors48h = unres.filter(e => now - e.ts <= 48 * 3600 * 1000);
+  const errors7d = unres.filter(e => now - e.ts > 48 * 3600 * 1000 && now - e.ts <= 7 * DAY);
+
+  const activeErrorList =
+    filterWindow === '48h' ? errors48h : filterWindow === '7d' ? errors7d : unres;
 
   const fixExplanations: Record<string, string> = {
     G: 'Fix: 48-hour patch on that subtopic only, if it is a PYT. One-off trivia: accept the loss.',
@@ -23,24 +31,63 @@ export const ErrorsView: React.FC<ErrorsViewProps> = ({ onStartBlock }) => {
 
   return (
     <div>
-      <h1>Error OS</h1>
-      <div className="row">
+      <h1>Error OS & Spaced Mistake Flush</h1>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="small">
           {unres.length} unresolved · {plugged} leaks plugged (answered right later)
         </span>
+        <div className="row">
+          <button
+            className="btn sm primary"
+            disabled={errors48h.length === 0}
+            onClick={() => onStartBlock('flush48')}
+            title="Drill mistakes from last 48 hours"
+          >
+            Flush 48h ({errors48h.length})
+          </button>
+          <button
+            className="btn sm"
+            disabled={errors7d.length === 0}
+            onClick={() => onStartBlock('flush7d')}
+            title="Drill mistakes from 3–7 days ago"
+          >
+            Flush 7d ({errors7d.length})
+          </button>
+          <button
+            className="btn sm"
+            disabled={unres.length === 0}
+            onClick={() => onStartBlock('purge')}
+          >
+            Purge All ({unres.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="row" style={{ marginTop: 12 }}>
         <button
-          className="btn primary"
-          disabled={unres.length === 0}
-          onClick={() => onStartBlock('purge')}
-          style={unres.length === 0 ? { pointerEvents: 'none', opacity: 0.45 } : undefined}
+          className={`btn sm ${filterWindow === 'all' ? 'primary' : ''}`}
+          onClick={() => setFilterWindow('all')}
         >
-          Mistake purge
+          All Unresolved ({unres.length})
+        </button>
+        <button
+          className={`btn sm ${filterWindow === '48h' ? 'primary' : ''}`}
+          onClick={() => setFilterWindow('48h')}
+        >
+          48-Hour Patch ({errors48h.length})
+        </button>
+        <button
+          className={`btn sm ${filterWindow === '7d' ? 'primary' : ''}`}
+          onClick={() => setFilterWindow('7d')}
+        >
+          7-Day Verification ({errors7d.length})
         </button>
       </div>
 
-      <div className="cols3" style={{ marginTop: 12 }}>
+      <div className="cols3" style={{ marginTop: 14 }}>
         {ETYPES.map(t => {
-          const list = unres
+          const list = activeErrorList
             .filter(e => (e.et === 'K' ? 'G' : e.et) === t)
             .sort((a, b) => b.ts - a.ts);
 

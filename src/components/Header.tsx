@@ -50,6 +50,12 @@ export const Header: React.FC<HeaderProps> = ({ currentRoute }) => {
         <a href="#/playbook" className={isRouteActive('playbook') ? 'on' : ''}>
           Playbook
         </a>
+        <a href="#/discriminators" className={isRouteActive('discriminators') ? 'on' : ''} title="Confusable Pairs Discriminator">
+          Pairs
+        </a>
+        <a href="#/volatile" className={isRouteActive('volatile') ? 'on' : ''} title="20 Easy-Mark Volatile Revision Sheets">
+          20 Sheets
+        </a>
         <a href="quest/" title="8-bit organ-system tracker">
           Quest
         </a>

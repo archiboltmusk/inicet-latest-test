@@ -17,9 +17,11 @@ import {
   BlockSummary,
 } from '../state';
 import { stemHTML } from '../utils/render';
+import { ImageLightboxModal } from '../components/ImageLightboxModal';
 
 export const MODES: Record<string, { label: string; n: number; secs: number }> = {
   mixed: { label: '50-Q mixed block', n: 50, secs: 45 * 60 },
+  gt200: { label: '200-Q Grand Test (4 locked parts)', n: 200, secs: 45 * 60 },
   diagnostic: { label: 'Diagnostic sweep', n: 50, secs: 45 * 60 },
   speed: { label: 'Speed run', n: 25, secs: 25 * 30 },
   purge: { label: 'Mistake purge', n: 50, secs: 0 },
@@ -27,6 +29,9 @@ export const MODES: Record<string, { label: string; n: number; secs: number }> =
   sprint: { label: 'Sprint drills', n: 50, secs: 0 },
   image: { label: 'Image questions', n: 25, secs: 25 * 45 },
   pyq26: { label: 'Dated PYQs (2022, 2026)', n: 50, secs: 0 },
+  multicorrect: { label: 'Multi-Correct & A/R questions', n: 25, secs: 25 * 50 },
+  flush48: { label: '48-Hour Mistake Flush', n: 30, secs: 0 },
+  flush7d: { label: '7-Day Mistake Flush', n: 40, secs: 0 },
 };
 
 interface BlockViewProps {
@@ -47,8 +52,15 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
 
   const [selectedSubject, setSelectedSubject] = useState('');
   const [now, setNow] = useState(Date.now());
-  const timerRef = useRef<number | null>(null);
+  const [lightbox, setLightbox] = useState<{
+    src: string;
+    caption?: string;
+    credit?: string;
+    lic?: string;
+    page?: string;
+  } | null>(null);
 
+  const timerRef = useRef<number | null>(null);
   const B = S.active;
 
   // Clock tick for active block
@@ -61,7 +73,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         if (timerRef.current) clearInterval(timerRef.current);
       };
     }
-  }, [B?.id, B?.done, B?.limit]);
+  }, [B?.id, B?.done, B?.limit, B?.part]);
 
   // Keyboard navigation for active block
   useEffect(() => {
@@ -175,8 +187,97 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
     });
   };
 
+  // Submit Part or Submit Block
   const submitCurrentBlock = (auto = false) => {
     if (!B || B.done) return;
+
+    // Check if this is a Multi-Part Grand Test with remaining parts
+    const isGrandTest = B.mode === 'gt200';
+    const currentPart = B.part || 1;
+    const totalParts = B.totalParts || (isGrandTest ? 4 : 1);
+
+    if (isGrandTest && currentPart < totalParts && B.partQids) {
+      // Transition from current part to next locked part
+      updateState(prev => {
+        if (!prev.active) return prev;
+        const act = { ...prev.active };
+        if (!auto) logQuestionTime(act);
+
+        const ts = Date.now();
+        let partCorrect = 0;
+        let partWrong = 0;
+        const newAttempts: Attempt[] = [...prev.attempts];
+        const newErrors: ErrorRecord[] = [...prev.errors];
+
+        act.qids.forEach((qid, i) => {
+          const q = questionMap[qid];
+          if (!q) return;
+          const a = act.ans[i];
+          const skip = a === undefined;
+          const ok = !skip && a === q.a;
+          if (ok) partCorrect++;
+          else if (!skip) partWrong++;
+
+          newAttempts.push({
+            qid,
+            c: q.c,
+            ok,
+            skip,
+            t: Math.round(act.tq[i] || 0),
+            ts,
+            b: act.id + '-p' + currentPart,
+            i: (currentPart - 1) * 50 + i,
+            flag: !!act.flags[i],
+            et: null,
+          });
+
+          if (ok) {
+            for (const e of newErrors) {
+              if (e.qid === qid && !e.resolved) {
+                e.resolved = ts;
+              }
+            }
+          }
+        });
+
+        const used = act.limit > 0 ? Math.min(act.limit, (ts - act.start) / 1000) : (ts - act.start) / 1000;
+        const partScore = {
+          part: currentPart,
+          correct: partCorrect,
+          wrong: partWrong,
+          net: partCorrect - partWrong / 3,
+          used,
+        };
+
+        const nextPart = currentPart + 1;
+        const nextQids = act.partQids![nextPart - 1];
+
+        act.part = nextPart;
+        act.qids = nextQids;
+        act.ans = {};
+        act.elim = {};
+        act.flags = {};
+        act.tq = {};
+        act.start = ts;
+        act.limit = 45 * 60;
+        act.cur = 0;
+        act.enter = ts;
+        act.partScores = [...(act.partScores || []), partScore];
+
+        return {
+          ...prev,
+          attempts: newAttempts,
+          errors: newErrors,
+          active: act,
+        };
+      });
+
+      showToast(`Part ${currentPart} submitted and locked. Starting Part ${currentPart + 1} of 4.`);
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    // Final submission (Single part or final Part 4 of GT)
     updateState(prev => {
       if (!prev.active || prev.active.done) return prev;
       const act = { ...prev.active };
@@ -187,6 +288,8 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
       let wrong = 0;
       const newAttempts: Attempt[] = [...prev.attempts];
       const newErrors: ErrorRecord[] = [...prev.errors];
+
+      const offset = isGrandTest ? (currentPart - 1) * 50 : 0;
 
       act.qids.forEach((qid, i) => {
         const q = questionMap[qid];
@@ -204,8 +307,8 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           skip,
           t: Math.round(act.tq[i] || 0),
           ts,
-          b: act.id,
-          i,
+          b: isGrandTest ? act.id + '-p' + currentPart : act.id,
+          i: offset + i,
           flag: !!act.flags[i],
           et: null,
         });
@@ -220,27 +323,71 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
       });
 
       const used = act.limit > 0 ? Math.min(act.limit, (ts - act.start) / 1000) : (ts - act.start) / 1000;
-      const newBlockSummary: BlockSummary = {
-        id: act.id,
-        ts,
-        mode: act.mode,
-        n: act.qids.length,
-        correct,
-        wrong,
-        net: correct - wrong / 3,
-        used,
-      };
 
-      act.done = true;
-      act.used = used;
+      if (isGrandTest) {
+        const lastPartScore = {
+          part: currentPart,
+          correct,
+          wrong,
+          net: correct - wrong / 3,
+          used,
+        };
+        const allScores = [...(act.partScores || []), lastPartScore];
+        const totalCorrect = allScores.reduce((acc, p) => acc + p.correct, 0);
+        const totalWrong = allScores.reduce((acc, p) => acc + p.wrong, 0);
+        const totalNet = totalCorrect - totalWrong / 3;
+        const totalUsed = allScores.reduce((acc, p) => acc + p.used, 0);
 
-      return {
-        ...prev,
-        attempts: newAttempts,
-        errors: newErrors,
-        blocks: [...prev.blocks, newBlockSummary],
-        active: act,
-      };
+        // Gather all 200 qids
+        const allQids = act.partQids ? act.partQids.flat() : act.qids;
+        act.qids = allQids;
+        act.partScores = allScores;
+
+        const newBlockSummary: BlockSummary = {
+          id: act.id,
+          ts,
+          mode: act.mode,
+          n: 200,
+          correct: totalCorrect,
+          wrong: totalWrong,
+          net: totalNet,
+          used: totalUsed,
+          partScores: allScores,
+        };
+
+        act.done = true;
+        act.used = totalUsed;
+
+        return {
+          ...prev,
+          attempts: newAttempts,
+          errors: newErrors,
+          blocks: [...prev.blocks, newBlockSummary],
+          active: act,
+        };
+      } else {
+        const newBlockSummary: BlockSummary = {
+          id: act.id,
+          ts,
+          mode: act.mode,
+          n: act.qids.length,
+          correct,
+          wrong,
+          net: correct - wrong / 3,
+          used,
+        };
+
+        act.done = true;
+        act.used = used;
+
+        return {
+          ...prev,
+          attempts: newAttempts,
+          errors: newErrors,
+          blocks: [...prev.blocks, newBlockSummary],
+          active: act,
+        };
+      }
     });
 
     if (auto) showToast('Time up: block locked');
@@ -249,19 +396,19 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
   const classifyError = (questionIndex: number, type: 'G' | 'R' | 'A' | 'T' | 'P') => {
     if (!B) return;
     updateState(prev => {
-      const att = prev.attempts.find(x => x.b === B.id && x.i === questionIndex);
+      const att = prev.attempts.find(x => x.b.startsWith(B.id) && x.i === questionIndex);
       if (!att) return prev;
       att.et = type;
 
       const q = questionMap[att.qid];
       const errors = [...prev.errors];
-      let err = errors.find(x => x.b === B.id && x.i === questionIndex);
+      let err = errors.find(x => x.b.startsWith(B.id) && x.i === questionIndex);
       if (!err) {
         err = {
           id: 'e' + Date.now() + questionIndex,
           qid: att.qid,
           c: q ? q.c : [],
-          b: B.id,
+          b: att.b,
           i: questionIndex,
           ts: Date.now(),
           note: '',
@@ -291,11 +438,11 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
   const updateErrorNote = (questionIndex: number, note: string) => {
     if (!B) return;
     updateState(prev => {
-      const att = prev.attempts.find(x => x.b === B.id && x.i === questionIndex);
+      const att = prev.attempts.find(x => x.b.startsWith(B.id) && x.i === questionIndex);
       if (!att) return prev;
 
       const errors = [...prev.errors];
-      let err = errors.find(x => x.b === B.id && x.i === questionIndex);
+      let err = errors.find(x => x.b.startsWith(B.id) && x.i === questionIndex);
       if (!err) {
         const q = questionMap[att.qid];
         const defaultType = questionIndex >= B.qids.length - 10 && (B.tq[questionIndex] || 0) < 20 ? 'P' : 'G';
@@ -303,7 +450,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           id: 'e' + Date.now() + questionIndex,
           qid: att.qid,
           c: q ? q.c : [],
-          b: B.id,
+          b: att.b,
           i: questionIndex,
           ts: Date.now(),
           note,
@@ -323,15 +470,52 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
     window.location.hash = '#/today';
   };
 
+  // Detect clinical qualifiers in question stem
+  const getStemQualifiers = (text: string) => {
+    const upper = text.toUpperCase();
+    const alerts: string[] = [];
+    if (/\b(EXCEPT|NOT|FALSE|LEAST|INCORRECT)\b/.test(upper)) {
+      alerts.push('EXCEPT / FALSE: Look for the statement that is NOT true.');
+    }
+    if (/\b(INITIAL|FIRST|IMMEDIATE)\s+(STEP|INVESTIGATION|MANAGEMENT|DRUG|ACTION)\b/.test(upper)) {
+      alerts.push('INITIAL STEP: Bedside / non-invasive test first (Do NOT jump to definitive/biopsy!).');
+    }
+    if (/\b(DEFINITIVE|GOLD\s+STANDARD|MOST\s+ACCURATE|CONFIRMATORY)\b/.test(upper)) {
+      alerts.push('DEFINITIVE / GOLD STANDARD: Pathological or angiographic standard (Not initial screen).');
+    }
+    if (/\b(INVESTIGATION\s+OF\s+CHOICE|IOC|DRUG\s+OF\s+CHOICE|DOC)\b/.test(upper)) {
+      alerts.push('IOC / DOC: Standard guideline first-line recommendation.');
+    }
+    return alerts;
+  };
+
   // Render Setup if no active block
   if (!B) {
     const unres = S.errors.filter(e => !e.resolved).length;
+    const unres48h = S.errors.filter(e => !e.resolved && Date.now() - e.ts <= 48 * 3600 * 1000).length;
+    const unres7d = S.errors.filter(e => !e.resolved && Date.now() - e.ts > 48 * 3600 * 1000 && Date.now() - e.ts <= 7 * DAY).length;
     const datedPyqsCount = questions.filter(q => /^PYQ/.test(q.t || '')).length;
 
     return (
       <div>
-        <h1>Timed block</h1>
+        <h1>Timed block & Grand Tests</h1>
         <div className="cols3">
+          {/* INI-CET Grand Test 200 */}
+          <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>
+            <span className="pill good">Official Simulator</span>
+            <h3>200-Q Grand Test (4 Parts)</h3>
+            <p className="small">
+              Full 200-question exam across 4 locked 45-min sections (50 Q each). Section locks upon submission,
+              faithfully training 38/7 pacing and simulating 3-hour exam endurance.
+            </p>
+            <button
+              className="btn primary"
+              onClick={() => onStartBlock('gt200')}
+            >
+              Start Grand Test
+            </button>
+          </div>
+
           <div className="card">
             <h3>50-Q mixed block</h3>
             <p className="small">
@@ -382,6 +566,17 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           </div>
 
           <div className="card">
+            <h3>Multi-Correct & A/R questions</h3>
+            <p className="small">
+              25 questions with combination choices (1, 2, 3) and Assertion-Reasoning statements,
+              characteristic of INI-CET.
+            </p>
+            <button className="btn" onClick={() => onStartBlock('multicorrect')}>
+              Start
+            </button>
+          </div>
+
+          <div className="card">
             <h3>Dated PYQs (2022 recall + 2026)</h3>
             <p className="small">
               {datedPyqsCount} dated INI-CET questions with explanations, untimed. Also searchable
@@ -396,7 +591,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
             <h3>Image questions</h3>
             <p className="small">
               25 INI-CET-style image questions (ECG, X-ray, smear, histology, clinical signs), 45 s
-              each. Weak clusters first; uses the subject picker in the mixed-block card.
+              each. Weak clusters first; tap any image to zoom and invert.
             </p>
             <button
               className="btn"
@@ -417,9 +612,37 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           </div>
 
           <div className="card">
-            <h3>Mistake purge</h3>
+            <h3>48-Hour Mistake Flush ({unres48h})</h3>
             <p className="small">
-              Re-attempt your unresolved wrong answers ({unres}). A question you get right here is
+              Immediate retention patch: re-test errors made in the last 48 hours before they become fixed misconceptions.
+            </p>
+            <button
+              className="btn"
+              disabled={!unres48h}
+              onClick={() => onStartBlock('flush48')}
+            >
+              Flush 48h Mistakes
+            </button>
+          </div>
+
+          <div className="card">
+            <h3>7-Day Mistake Flush ({unres7d})</h3>
+            <p className="small">
+              Spaced verification: re-attempt mistakes from 3–7 days ago to confirm the leak is permanently plugged.
+            </p>
+            <button
+              className="btn"
+              disabled={!unres7d}
+              onClick={() => onStartBlock('flush7d')}
+            >
+              Flush 7d Mistakes
+            </button>
+          </div>
+
+          <div className="card">
+            <h3>Mistake purge ({unres})</h3>
+            <p className="small">
+              Re-attempt all your unresolved wrong answers. A question you get right here is
               marked as a plugged leak.
             </p>
             <button
@@ -427,12 +650,12 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
               disabled={!unres}
               onClick={() => onStartBlock('purge')}
             >
-              Start
+              Purge All
             </button>
           </div>
         </div>
 
-        <h2>Past blocks</h2>
+        <h2>Past blocks & Grand Tests</h2>
         {S.blocks.length > 0 ? (
           <div className="tbl">
             <table>
@@ -446,6 +669,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
                   <th>Skipped</th>
                   <th>Accuracy</th>
                   <th>Time</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -457,7 +681,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
                     <tr key={b.id}>
                       <td>{new Date(b.ts).toLocaleDateString()}</td>
                       <td>{MODES[b.mode]?.label || b.mode}</td>
-                      <td>{b.net.toFixed(1)}</td>
+                      <td><b>{b.net.toFixed(1)}</b></td>
                       <td>{b.correct}</td>
                       <td>{b.wrong}</td>
                       <td>{b.n - b.correct - b.wrong}</td>
@@ -467,6 +691,13 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
                           : '—'}
                       </td>
                       <td>{fmtT(b.used)}</td>
+                      <td>
+                        {b.partScores ? (
+                          <span className="small muted">
+                            P1:{b.partScores[0]?.net.toFixed(0)} P2:{b.partScores[1]?.net.toFixed(0)} P3:{b.partScores[2]?.net.toFixed(0)} P4:{b.partScores[3]?.net.toFixed(0)}
+                          </span>
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
               </tbody>
@@ -481,14 +712,17 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
 
   // Render Result if done
   if (B.done) {
+    const isGrandTest = B.mode === 'gt200';
     const b = S.blocks.find(x => x.id === B.id) || {
       net: 0,
       n: B.qids.length,
       correct: 0,
       wrong: 0,
       used: B.used || 0,
+      partScores: B.partScores,
     };
-    const atts = S.attempts.filter(a => a.b === B.id);
+
+    const atts = S.attempts.filter(a => a.b.startsWith(B.id));
     const quarters = [0, 1, 2, 3, 4].map(k => {
       const seg = atts.filter(
         a => a.i >= (k * B.qids.length) / 5 && a.i < ((k + 1) * B.qids.length) / 5
@@ -500,10 +734,11 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
     return (
       <div>
         <h1>{MODES[B.mode]?.label || B.mode}: result</h1>
+
         <div className="grid">
           <div className="card">
-            <div className="muted small">Net score</div>
-            <div className="stat">
+            <div className="muted small">Total Net score</div>
+            <div className="stat" style={{ color: 'var(--accent)' }}>
               {b.net.toFixed(2)} / {b.n}
             </div>
             <div className="small muted">+1 right, −⅓ wrong</div>
@@ -518,18 +753,53 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
             </div>
           </div>
           <div className="card">
-            <div className="muted small">Time used</div>
+            <div className="muted small">Total Time used</div>
             <div className="stat">{fmtT(b.used)}</div>
-            <div className="small muted">of {fmtT(B.limit)}</div>
+            <div className="small muted">{isGrandTest ? '180 min total lockout' : `of ${fmtT(B.limit)}`}</div>
           </div>
           <div className="card">
-            <div className="muted small">By fifth of the block</div>
+            <div className="muted small">Fatigue & Pacing curve</div>
             <div className="stat small" style={{ fontSize: 16 }}>
               {quarters.join(' · ')}
             </div>
             <div className="small muted">A drop at the end = pacing/fatigue</div>
           </div>
         </div>
+
+        {/* Grand Test Part Breakdown */}
+        {isGrandTest && b.partScores && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <h3>Grand Test Part-by-Part Score Breakdown</h3>
+            <div className="tbl">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Section</th>
+                    <th>Questions</th>
+                    <th>Net Score</th>
+                    <th>Correct</th>
+                    <th>Wrong</th>
+                    <th>Accuracy</th>
+                    <th>Time Used</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {b.partScores.map(ps => (
+                    <tr key={ps.part}>
+                      <td><b>Part {ps.part}</b></td>
+                      <td>Q{(ps.part - 1) * 50 + 1} – Q{ps.part * 50}</td>
+                      <td><b>{ps.net.toFixed(1)} / 50</b></td>
+                      <td>{ps.correct}</td>
+                      <td>{ps.wrong}</td>
+                      <td>{ps.correct + ps.wrong ? pct(ps.correct / (ps.correct + ps.wrong)) : '—'}</td>
+                      <td>{fmtT(ps.used)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <h2>
           Audit every lost mark{' '}
@@ -545,10 +815,10 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         {review.map(a => {
           const q = questionMap[a.qid];
           if (!q) return null;
-          const att = S.attempts.find(x => x.b === B.id && x.i === a.i);
-          const ch = B.ans[a.i];
+          const att = S.attempts.find(x => x.b.startsWith(B.id) && x.i === a.i);
+          const ch = B.ans[a.i % 50]; // handles single or multi-part index
           const defaultEt = a.i >= B.qids.length - 10 && (a.t || 0) < 20 ? 'P' : 'G';
-          const err = S.errors.find(e => e.b === B.id && e.i === a.i);
+          const err = S.errors.find(e => e.b.startsWith(B.id) && e.i === a.i);
           const activeEt = err ? err.et : att?.et || defaultEt;
 
           return (
@@ -573,18 +843,22 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
               />
 
               {q.i && (
-                <figure className="qimg">
+                <figure
+                  className="qimg"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() =>
+                    setLightbox({
+                      src: q.i!.src,
+                      caption: q.i!.cap || q.i!.caption,
+                      credit: q.i!.credit,
+                      lic: q.i!.lic,
+                      page: q.i!.page,
+                    })
+                  }
+                >
                   <img src={q.i.src} alt="Question image" loading="lazy" />
                   <figcaption className="credit">
-                    {q.i.credit} · {q.i.lic}
-                    {q.i.page && (
-                      <>
-                        {' · '}
-                        <a href={q.i.page} target="_blank" rel="noopener noreferrer">
-                          source
-                        </a>
-                      </>
-                    )}
+                    {q.i.credit} · {q.i.lic} (Tap to zoom & invert)
                   </figcaption>
                 </figure>
               )}
@@ -653,11 +927,26 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
             Open Error OS
           </a>
         </div>
+
+        {lightbox && (
+          <ImageLightboxModal
+            src={lightbox.src}
+            caption={lightbox.caption}
+            credit={lightbox.credit}
+            licence={lightbox.lic}
+            sourceUrl={lightbox.page}
+            onClose={() => setLightbox(null)}
+          />
+        )}
       </div>
     );
   }
 
   // Active Block Running
+  const isGrandTest = B.mode === 'gt200';
+  const currentPart = B.part || 1;
+  const totalParts = B.totalParts || (isGrandTest ? 4 : 1);
+
   const elapsed = (Date.now() - B.start) / 1000;
   if (B.limit > 0 && elapsed >= B.limit) {
     submitCurrentBlock(true);
@@ -679,7 +968,11 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
 
   const handleSubmit = () => {
     const un = n - answeredCount;
-    if (window.confirm(`Submit block?${un > 0 ? ` ${un} unanswered.` : ''}`)) {
+    const promptMsg = isGrandTest && currentPart < totalParts
+      ? `Submit Part ${currentPart} of ${totalParts}?${un > 0 ? ` ${un} unanswered.` : ''}\n\nWARNING: Once submitted, Part ${currentPart} will be LOCKED and you will immediately begin Part ${currentPart + 1}.`
+      : `Submit block?${un > 0 ? ` ${un} unanswered.` : ''}`;
+
+    if (window.confirm(promptMsg)) {
       submitCurrentBlock(false);
     }
   };
@@ -695,11 +988,16 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
     );
   }
 
+  const stemQualifiers = getStemQualifiers(q.q);
+
   return (
     <div>
       <div className="qhead">
         <div>
-          <b>{MODES[B.mode]?.label || B.mode}</b>{' '}
+          <b>
+            {MODES[B.mode]?.label || B.mode}
+            {isGrandTest && ` · Part ${currentPart} of ${totalParts}`}
+          </b>{' '}
           <span className="muted small">
             {n} Q · {B.limit > 0 ? fmtT(B.limit) : 'untimed'} · +1 / −⅓
           </span>
@@ -714,7 +1012,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
             </span>
           )}
           <button className="btn sm" onClick={handleSubmit}>
-            Submit
+            {isGrandTest && currentPart < totalParts ? `Submit Part ${currentPart} & Lock` : 'Submit'}
           </button>
         </div>
       </div>
@@ -736,10 +1034,26 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         </>
       )}
 
+      {/* Qualifier and Trap Check alert */}
+      {stemQualifiers.map((alertText, aIdx) => (
+        <div
+          key={aIdx}
+          className="box trap"
+          style={{
+            margin: '8px 0',
+            fontSize: 13,
+            padding: '7px 12px',
+            borderLeft: '4px solid var(--warn)',
+          }}
+        >
+          <b>⚠️ Qualifier Check:</b> {alertText}
+        </div>
+      ))}
+
       <div className="card" style={{ marginTop: 10 }}>
         <div className="row small muted">
           <span>
-            Q {i + 1} / {n}
+            Q {isGrandTest ? (currentPart - 1) * 50 + i + 1 : i + 1} / {isGrandTest ? 200 : n}
           </span>
           <span>{q.s}</span>
           {q.t && <span className="pill">{q.t}</span>}
@@ -758,18 +1072,22 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         />
 
         {q.i && (
-          <figure className="qimg">
+          <figure
+            className="qimg"
+            style={{ cursor: 'pointer' }}
+            onClick={() =>
+              setLightbox({
+                src: q.i!.src,
+                caption: q.i!.cap || q.i!.caption,
+                credit: q.i!.credit,
+                lic: q.i!.lic,
+                page: q.i!.page,
+              })
+            }
+          >
             <img src={q.i.src} alt="Question image" loading="lazy" />
             <figcaption className="credit">
-              {q.i.credit} · {q.i.lic}
-              {q.i.page && (
-                <>
-                  {' · '}
-                  <a href={q.i.page} target="_blank" rel="noopener noreferrer">
-                    source
-                  </a>
-                </>
-              )}
+              {q.i.credit} · {q.i.lic} (Tap to zoom & invert)
             </figcaption>
           </figure>
         )}
@@ -824,6 +1142,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
           const hasAnswer = B.ans[k] !== undefined;
           const isFlagged = B.flags[k];
           const isCur = k === i;
+          const displayNum = isGrandTest ? (currentPart - 1) * 50 + k + 1 : k + 1;
 
           return (
             <button
@@ -833,7 +1152,7 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
               } ${isCur ? 'cur' : ''}`}
               onClick={() => jumpToQuestion(k)}
             >
-              {k + 1}
+              {displayNum}
             </button>
           );
         })}
@@ -843,6 +1162,17 @@ export const BlockView: React.FC<BlockViewProps> = ({ onStartBlock }) => {
         Keys: <kbd>1</kbd>–<kbd>4</kbd> answer · <kbd>F</kbd> flag · <kbd>←</kbd>/<kbd>→</kbd> move. 38/7 rule:
         first pass by 84% of the time, then review flagged 2-option questions.
       </p>
+
+      {lightbox && (
+        <ImageLightboxModal
+          src={lightbox.src}
+          caption={lightbox.caption}
+          credit={lightbox.credit}
+          licence={lightbox.lic}
+          sourceUrl={lightbox.page}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 };
