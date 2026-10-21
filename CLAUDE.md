@@ -1,0 +1,18 @@
+# INI-CET Revision OS — Claude instructions
+
+- Read SNAPSHOT.md first; do not scan the repo. Then BACKLOG.md ">>RESUME HERE".
+- Exam: INI-CET 1 Nov 2026. Only build what adds marks before then.
+- Static app, no build framework: index.html + app.js + sprint.js + app.css. Data: data/clusters/*.json → `python3 tools/build.py` → data/clusters.js, data/questions.js.
+- New images: name exact Commons file in cluster `images[].commons`, run `python3 tools/fetch_images.py` (CC0/PD/CC BY/BY-SA only; 500 px thumbs; 429s → wait and rerun).
+- Clinical accuracy: state guideline in `verify`; give exam-classic and current answers when they differ; never invent numbers, BNS sections or PYQ wording.
+- Test: headless Playwright at /opt/node-tools/node_modules/playwright, 390 px viewport, zero page errors.
+- Bump CACHE in sw.js on every shipped change.
+- Branch claude/*, draft PR to main. User is terse; reply with results only.
+- On task completion update SNAPSHOT.md, BACKLOG.md and this file.
+- Marrow/BTR notes are licensed: topic names only, never copy text/images/questions.
+
+- Dated PYQs: sources/pyq_dated.json (2026 + 2022 recall); `x` field overrides sitting label. 2023-25 not openly available.
+- Algorithms: write as indented text; app renders as flowchart. Trap check requests: discriminator + next vs definitive step.
+- Instrument clusters live in data/clusters/instruments.json; MCQs tagged INSTRUMENT in sources/practice_sets/instruments.json.
+- Image fallback when Commons 429s: Openverse API (anon 20/min, 200/day; params q, license=cc0,pdm,by,by-sa), download Wikimedia files via upload.wikimedia.org/.../thumb/.../500px-NAME (works), store in img/ov_<id8>.jpg and data/images.json key ov:<id8>.
+- quest/ is a ported third-party page (sakthii002/inicet-quest, no license file); standalone, own localStorage key; don't merge its state into app.js.

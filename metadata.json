@@ -1,0 +1,8 @@
+{
+  "name": "INI-CET Revision OS",
+  "description": "PYT cluster revision, timed 50-question blocks, Error OS and weak-topic diagnosis for INI-CET.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
